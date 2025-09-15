@@ -11,7 +11,6 @@ import (
 type UserRepository interface {
 	CreateUser(ctx context.Context, user model.User) error
 	GetUserByLogin(ctx context.Context, login string) (model.User, error)
-	// GetUserByID(ctx context.Context, id uuid.UUID) (model.User, error) // Может понадобиться
 }
 
 type DocumentRepository interface {
@@ -21,15 +20,4 @@ type DocumentRepository interface {
 	DeleteDocument(ctx context.Context, docID uuid.UUID) error
 	AddGrants(ctx context.Context, docID uuid.UUID, logins []string) error
 	GetGrants(ctx context.Context, docID uuid.UUID) ([]string, error)
-	// GetDocumentWithOwnerCheck // Метод для проверки владельца при удалении/обновлении
 }
-
-// Для простоты, кэш будет реализован в сервисе, используя Redis напрямую
-// type CacheRepository interface {
-//     GetDocumentList(ctx context.Context, key string) ([]byte, error)
-//     SetDocumentList(ctx context.Context, key string, data []byte, ttl time.Duration) error
-//     GetDocumentItem(ctx context.Context, key string) ([]byte, error)
-//     SetDocumentItem(ctx context.Context, key string, data []byte, ttl time.Duration) error
-//     InvalidateDocumentList(ctx context.Context, pattern string) error // Для инвалидации при создании/удалении
-//     InvalidateDocumentItem(ctx context.Context, key string) error
-// }

@@ -1,4 +1,4 @@
-basePath: /api/v1
+basePath: /
 definitions:
   middleware.ErrorResponse:
     properties:
@@ -14,6 +14,27 @@ definitions:
         $ref: '#/definitions/middleware.ErrorResponse'
       response: {}
     type: object
+  model.RegisterRequest:
+    properties:
+      login:
+        description: |-
+          User login (min 8 chars, latin letters and digits)
+          required: true
+          minLength: 8
+          pattern: ^[a-zA-Z0-9]+$
+        type: string
+      pswd:
+        description: |-
+          User password (min 8 chars, 2 letters different case, 1 digit, 1 special char)
+          required: true
+          minLength: 8
+        type: string
+      token:
+        description: |-
+          Admin token required for registration
+          required: true
+        type: string
+    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -26,15 +47,6 @@ paths:
       consumes:
       - application/json
       description: Получение JWT токена по логину и паролю.
-      parameters:
-      - description: Учетные данные
-        in: body
-        name: request
-        required: true
-        schema:
-          additionalProperties:
-            type: string
-          type: object
       produces:
       - application/json
       responses:
@@ -251,9 +263,7 @@ paths:
         name: request
         required: true
         schema:
-          additionalProperties:
-            type: string
-          type: object
+          $ref: '#/definitions/model.RegisterRequest'
       produces:
       - application/json
       responses:

@@ -3,7 +3,7 @@
 // @version 1.0
 // @description Веб-сервер для сохранения и раздачи электронных документов с кэшированием.
 // @host localhost:8080
-// @BasePath /api/v1
+// @BasePath /
 // @schemes http https
 package main
 
@@ -14,6 +14,11 @@ import (
 	"document-server/internal/config"
 )
 
+// @title Document Server API
+// @version 1.0
+// @description Веб-сервер для сохранения и раздачи электронных документов с кэшированием.
+// @host localhost:8080
+// @BasePath /
 func main() {
 	cfg, err := config.LoadConfig(".")
 	if err != nil {

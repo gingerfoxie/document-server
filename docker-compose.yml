@@ -32,6 +32,24 @@ services:
       timeout: 3s
       retries: 3
 
+ # --- Сервис для миграций ---
+  migrate:
+    # Используем официальный образ migrate
+    image: migrate/migrate:v4.17.0 # Указываем конкретный тег для стабильности
+    # Переопределяем команду по умолчанию образа
+    command: [
+      "-path", "/migrations", # Путь внутри контейнера, где лежат файлы миграций
+      "-database", "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable",
+      "up" # Команда для применения миграций
+    ]
+    volumes:
+      # Монтируем локальную папку migrations в контейнер по пути /migrations
+      - ./migrations:/migrations:ro
+    depends_on:
+      db:
+        condition: service_healthy # Ждем, пока БД будет готова
+    # Этот сервис запускается один раз, применяет миграции и завершается
+
   app:
     build: .
     container_name: doc_server
@@ -39,8 +57,8 @@ services:
     ports:
       - "${SERVER_PORT}:${SERVER_PORT}"
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully # Ждем успешного завершения миграций
       redis:
         condition: service_healthy
     environment:

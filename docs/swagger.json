@@ -11,7 +11,7 @@
         "version": "1.0"
     },
     "host": "localhost:8080",
-    "basePath": "/api/v1",
+    "basePath": "/",
     "paths": {
         "/api/auth": {
             "post": {
@@ -26,20 +26,6 @@
                     "auth"
                 ],
                 "summary": "Аутентификация пользователя",
-                "parameters": [
-                    {
-                        "description": "Учетные данные",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -360,10 +346,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/model.RegisterRequest"
                         }
                     }
                 ],
@@ -410,6 +393,23 @@
                     "$ref": "#/definitions/middleware.ErrorResponse"
                 },
                 "response": {}
+            }
+        },
+        "model.RegisterRequest": {
+            "type": "object",
+            "properties": {
+                "login": {
+                    "description": "User login (min 8 chars, latin letters and digits)\nrequired: true\nminLength: 8\npattern: ^[a-zA-Z0-9]+$",
+                    "type": "string"
+                },
+                "pswd": {
+                    "description": "User password (min 8 chars, 2 letters different case, 1 digit, 1 special char)\nrequired: true\nminLength: 8",
+                    "type": "string"
+                },
+                "token": {
+                    "description": "Admin token required for registration\nrequired: true",
+                    "type": "string"
+                }
             }
         }
     }

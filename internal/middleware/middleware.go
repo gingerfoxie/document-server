@@ -22,7 +22,7 @@ func NewMiddleware(s *service.Service, logger *slog.Logger) *Middleware {
 	return &Middleware{service: s, logger: logger}
 }
 
-// Response структура для统一 ответа
+// Response структура для ответа
 type Response struct {
 	Error    *ErrorResponse `json:"error,omitempty"`
 	Response interface{}    `json:"response,omitempty"`
@@ -65,11 +65,6 @@ func (m *Middleware) AuthRequired(next http.Handler) http.Handler {
 			WriteJSONResponse(w, Response{Error: &ErrorResponse{Code: 401, Text: "Invalid or expired token"}}, http.StatusUnauthorized)
 			return
 		}
-
-		// Можно добавить userID в контекст для использования в обработчиках
-		// userID, _ := m.service.GetUserIDFromToken(tokenString)
-		// ctx := context.WithValue(r.Context(), "userID", userID)
-		// next.ServeHTTP(w, r.WithContext(ctx))
 
 		next.ServeHTTP(w, r)
 	})

@@ -32,28 +32,26 @@ func NewHandler(s *service.Service, logger *slog.Logger) *Handler {
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body map[string]string true "Данные для регистрации"
+// @Param request body model.RegisterRequest true "Данные для регистрации"
 // @Success 200 {object} middleware.Response
 // @Failure 400 {object} middleware.Response
 // @Failure 401 {object} middleware.Response
 // @Router /api/register [post]
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Token string `json:"token"`
-		Login string `json:"login"`
-		Pswd  string `json:"pswd"`
-	}
+
+	var req model.RegisterRequest
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Invalid JSON"}}, http.StatusBadRequest)
 		return
 	}
 
-	if req.Token == "" || req.Login == "" || req.Pswd == "" {
+	if req.Token == "" || req.Login == "" || req.Password == "" {
 		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing required fields: token, login, pswd"}}, http.StatusBadRequest)
 		return
 	}
 
-	err := h.service.Register(r.Context(), req.Token, req.Login, req.Pswd)
+	err := h.service.Register(r.Context(), req.Token, req.Login, req.Password)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if err.Error() == "invalid admin token" || strings.Contains(err.Error(), "failed to validate") {
@@ -74,27 +72,24 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body map[string]string true "Учетные данные"
+// @PParam request body model.AuthRequest true "Учетные данные"
 // @Success 200 {object} middleware.Response
 // @Failure 400 {object} middleware.Response
 // @Failure 401 {object} middleware.Response
 // @Router /api/auth [post]
 func (h *Handler) Authenticate(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Login string `json:"login"`
-		Pswd  string `json:"pswd"`
-	}
+	var req model.AuthRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Invalid JSON"}}, http.StatusBadRequest)
 		return
 	}
 
-	if req.Login == "" || req.Pswd == "" {
+	if req.Login == "" || req.Password == "" {
 		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing login or password"}}, http.StatusBadRequest)
 		return
 	}
 
-	tokenString, err := h.service.Authenticate(r.Context(), req.Login, req.Pswd)
+	tokenString, err := h.service.Authenticate(r.Context(), req.Login, req.Password)
 	if err != nil {
 		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Invalid login or password"}}, http.StatusUnauthorized)
 		return

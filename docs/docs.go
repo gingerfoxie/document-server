@@ -28,20 +28,6 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Аутентификация пользователя",
-                "parameters": [
-                    {
-                        "description": "Учетные данные",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -362,10 +348,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
+                            "$ref": "#/definitions/model.RegisterRequest"
                         }
                     }
                 ],
@@ -413,6 +396,23 @@ const docTemplate = `{
                 },
                 "response": {}
             }
+        },
+        "model.RegisterRequest": {
+            "type": "object",
+            "properties": {
+                "login": {
+                    "description": "User login (min 8 chars, latin letters and digits)\nrequired: true\nminLength: 8\npattern: ^[a-zA-Z0-9]+$",
+                    "type": "string"
+                },
+                "pswd": {
+                    "description": "User password (min 8 chars, 2 letters different case, 1 digit, 1 special char)\nrequired: true\nminLength: 8",
+                    "type": "string"
+                },
+                "token": {
+                    "description": "Admin token required for registration\nrequired: true",
+                    "type": "string"
+                }
+            }
         }
     }
 }`
@@ -421,7 +421,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "1.0",
 	Host:             "localhost:8080",
-	BasePath:         "/api/v1",
+	BasePath:         "/",
 	Schemes:          []string{"http", "https"},
 	Title:            "Document Server API",
 	Description:      "Веб-сервер для сохранения и раздачи электронных документов с кэшированием.",
