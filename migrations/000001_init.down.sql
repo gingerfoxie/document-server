@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS document_grants;
+DROP TABLE IF EXISTS documents;
+DROP TABLE IF EXISTS users;
+DROP EXTENSION IF EXISTS "uuid-ossp";

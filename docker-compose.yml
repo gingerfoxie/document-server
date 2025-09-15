@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:15
+    container_name: doc_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432" # Можно убрать, если не нужно внешнее подключение
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: doc_redis
+    restart: always
+    ports:
+      - "6379:6379" # Можно убрать
+    volumes:
+      - redis_data:/data
+    # command: redis-server --requirepass ${REDIS_PASSWORD} # Если нужен пароль
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  app:
+    build: .
+    container_name: doc_server
+    restart: always
+    ports:
+      - "${SERVER_PORT}:${SERVER_PORT}"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - SERVER_PORT=${SERVER_PORT}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_SSLMODE=${DB_SSLMODE}
+      - REDIS_ADDR=${REDIS_ADDR}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_DB=${REDIS_DB}
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - CACHE_TTL_DOC_LIST=${CACHE_TTL_DOC_LIST}
+      - CACHE_TTL_DOC_ITEM=${CACHE_TTL_DOC_ITEM}
+    # volumes:
+    #   - .env:/root/.env:ro # Монтируем .env файл
+
+volumes:
+  postgres_data:
+  redis_data:
