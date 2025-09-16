@@ -35,11 +35,4 @@ CREATE TABLE IF NOT EXISTS document_grants (
 -- Index for faster grant lookups
 CREATE INDEX IF NOT EXISTS idx_document_grants_user_login ON document_grants(user_login);
 
--- Sessions/Tokens table (for storing active JWT tokens or refresh tokens if needed)
--- For simplicity, we'll rely on JWT expiration. If logout needs to be immediate,
--- a token blacklist table would be needed.
--- CREATE TABLE IF NOT EXISTS user_sessions (
---     token_hash TEXT PRIMARY KEY, -- Store hash of token to prevent lookup by full token
---     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
---     expires_at TIMESTAMP NOT NULL
--- );
+

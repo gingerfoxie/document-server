@@ -21,12 +21,12 @@ type Document struct {
 
 // Для входящих данных при создании
 type CreateDocumentRequest struct {
-	Name     string   `json:"name"`
-	IsFile   bool     `json:"file"`
-	IsPublic bool     `json:"public"`
-	Token    string   `json:"token"`
-	Mime     string   `json:"mime"`
-	Grant    []string `json:"grant"`
+	Name     string `json:"name"`
+	IsFile   bool   `json:"file"`
+	IsPublic bool   `json:"public"`
+	//Token    string   `json:"token"` берем из хэдера для однородности логики приложения
+	Mime  string   `json:"mime"`
+	Grant []string `json:"grant"`
 	// JSONData будет передаваться отдельно как часть multipart/form-data
 	// File будет передаваться отдельно как часть multipart/form-data
 }

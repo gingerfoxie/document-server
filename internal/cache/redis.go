@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -37,26 +38,38 @@ func (r *RedisCache) SetDocumentItem(ctx context.Context, key string, data []byt
 	return r.client.Set(ctx, key, data, r.ttlItem).Err()
 }
 
-// Инвалидация может быть сложной. Простой способ: инвалидировать все списки.
-// Более точный: использовать ключи с префиксами и сканировать их.
+// InvalidateDocumentLists инвалидирует кэши списков документов.
+// Используем Scan для поиска ключей по паттерну
 func (r *RedisCache) InvalidateDocumentLists(ctx context.Context) error {
-	// Это грубый способ. В production лучше использовать тэги или префиксы.
-	// Например, все ключи списков могут начинаться с "doclist:"
 	iter := r.client.Scan(ctx, 0, "doclist:*", 0).Iterator()
 	for iter.Next(ctx) {
 		err := r.client.Del(ctx, iter.Val()).Err()
 		if err != nil {
 			// Логируем, но продолжаем
-			// log.Printf("Failed to delete cache key %s: %v", iter.Val(), err)
+			log.Printf("Failed to delete cache key %s: %v", iter.Val(), err)
 		}
 	}
 	return iter.Err()
 }
 
+// InvalidateDocumentItem инвалидирует кэш конкретного документа.
 func (r *RedisCache) InvalidateDocumentItem(ctx context.Context, key string) error {
 	return r.client.Del(ctx, key).Err()
 }
 
-// Методы для работы с токенами (если нужно кэшировать активные токены или блэклист)
-// func (r *RedisCache) IsTokenBlacklisted(ctx context.Context, token string) (bool, error) { ... }
-// func (r *RedisCache) BlacklistToken(ctx context.Context, token string, exp time.Duration) error { ... }
+// BlacklistToken добавляет токен (его хэш) в блэклист с заданным TTL.
+func (r *RedisCache) BlacklistToken(ctx context.Context, tokenHash string, ttl time.Duration) error {
+	key := "blacklist:" + tokenHash
+	return r.client.Set(ctx, key, "1", ttl).Err()
+}
+
+// IsTokenBlacklisted проверяет, находится ли токен (его хэш) в блэклисте.
+func (r *RedisCache) IsTokenBlacklisted(ctx context.Context, tokenHash string) (bool, error) {
+	key := "blacklist:" + tokenHash
+	// EXISTS проверяет наличие ключа
+	exists, err := r.client.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}

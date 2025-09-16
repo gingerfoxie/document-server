@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"regexp"
 	"unicode"
 )
@@ -53,4 +55,10 @@ func ValidatePassword(password string) error {
 	}
 
 	return nil
+}
+
+// HashToken создает SHA256 хэш токена для хранения в блэклисте.
+func HashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("%x", hash)
 }

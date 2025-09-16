@@ -28,6 +28,17 @@ const docTemplate = `{
                     "auth"
                 ],
                 "summary": "Аутентификация пользователя",
+                "parameters": [
+                    {
+                        "description": "Учетные данные",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/model.AuthRequest"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -63,9 +74,9 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Токен авторизации",
-                        "name": "token",
-                        "in": "path",
+                        "description": "Токен авторизации в формате Bearer \u003ctoken\u003e",
+                        "name": "Authorization",
+                        "in": "header",
                         "required": true
                     }
                 ],
@@ -104,9 +115,9 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Токен авторизации",
-                        "name": "token",
-                        "in": "query",
+                        "description": "Токен авторизации в формате Bearer \u003ctoken\u003e",
+                        "name": "Authorization",
+                        "in": "header",
                         "required": true
                     },
                     {
@@ -170,6 +181,13 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "description": "Токен авторизации в формате Bearer \u003ctoken\u003e",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
                         "description": "Метаданные документа в формате JSON",
                         "name": "meta",
                         "in": "formData",
@@ -223,26 +241,20 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ID документа",
-                        "name": "id",
-                        "in": "path",
+                        "description": "Токен авторизации в формате Bearer \u003ctoken\u003e",
+                        "name": "Authorization",
+                        "in": "header",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Токен авторизации",
-                        "name": "token",
-                        "in": "query",
+                        "description": "ID документа",
+                        "name": "id",
+                        "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/middleware.Response"
-                        }
-                    },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
@@ -281,16 +293,16 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "ID документа",
-                        "name": "id",
-                        "in": "path",
+                        "description": "Токен авторизации в формате Bearer \u003ctoken\u003e",
+                        "name": "Authorization",
+                        "in": "header",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Токен авторизации",
-                        "name": "token",
-                        "in": "query",
+                        "description": "ID документа",
+                        "name": "id",
+                        "in": "path",
                         "required": true
                     }
                 ],
@@ -395,6 +407,19 @@ const docTemplate = `{
                     "$ref": "#/definitions/middleware.ErrorResponse"
                 },
                 "response": {}
+            }
+        },
+        "model.AuthRequest": {
+            "type": "object",
+            "properties": {
+                "login": {
+                    "description": "User login\nrequired: true",
+                    "type": "string"
+                },
+                "pswd": {
+                    "description": "User password\nrequired: true",
+                    "type": "string"
+                }
             }
         },
         "model.RegisterRequest": {

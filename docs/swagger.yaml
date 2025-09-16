@@ -14,6 +14,19 @@ definitions:
         $ref: '#/definitions/middleware.ErrorResponse'
       response: {}
     type: object
+  model.AuthRequest:
+    properties:
+      login:
+        description: |-
+          User login
+          required: true
+        type: string
+      pswd:
+        description: |-
+          User password
+          required: true
+        type: string
+    type: object
   model.RegisterRequest:
     properties:
       login:
@@ -47,6 +60,13 @@ paths:
       consumes:
       - application/json
       description: Получение JWT токена по логину и паролю.
+      parameters:
+      - description: Учетные данные
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.AuthRequest'
       produces:
       - application/json
       responses:
@@ -69,9 +89,9 @@ paths:
     delete:
       description: Завершение авторизованной сессии (помечает токен как недействительный).
       parameters:
-      - description: Токен авторизации
-        in: path
-        name: token
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
         required: true
         type: string
       produces:
@@ -97,9 +117,9 @@ paths:
       description: Получение списка документов текущего пользователя или указанного
         пользователя (если публичные). Поддерживает фильтрацию и пагинацию.
       parameters:
-      - description: Токен авторизации
-        in: query
-        name: token
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
         required: true
         type: string
       - description: Логин пользователя, чьи документы запрашиваются
@@ -141,6 +161,11 @@ paths:
       - multipart/form-data
       description: Загрузка нового документа (файла или JSON) с метаданными.
       parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
       - description: Метаданные документа в формате JSON
         in: formData
         name: meta
@@ -176,14 +201,14 @@ paths:
     delete:
       description: Удаление документа по ID. Доступно только владельцу.
       parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
       - description: ID документа
         in: path
         name: id
-        required: true
-        type: string
-      - description: Токен авторизации
-        in: query
-        name: token
         required: true
         type: string
       produces:
@@ -216,23 +241,19 @@ paths:
       description: Получение конкретного документа по ID. Если это файл, он отдается
         напрямую. Если JSON - возвращается в обертке data.
       parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
       - description: ID документа
         in: path
         name: id
         required: true
         type: string
-      - description: Токен авторизации
-        in: query
-        name: token
-        required: true
-        type: string
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/middleware.Response'
         "400":
           description: Bad Request
           schema:

@@ -72,7 +72,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 // @Tags auth
 // @Accept json
 // @Produce json
-// @PParam request body model.AuthRequest true "Учетные данные"
+// @Param request body model.AuthRequest true "Учетные данные"
 // @Success 200 {object} middleware.Response
 // @Failure 400 {object} middleware.Response
 // @Failure 401 {object} middleware.Response
@@ -98,12 +98,44 @@ func (h *Handler) Authenticate(w http.ResponseWriter, r *http.Request) {
 	middleware.WriteJSONResponse(w, middleware.Response{Response: map[string]string{"token": tokenString}}, http.StatusOK)
 }
 
+// Logout godoc
+// @Summary Завершение сессии
+// @Description Завершение авторизованной сессии (помечает токен как недействительный).
+// @Tags auth
+// @Produce json
+// @Param Authorization header string true "Токен авторизации в формате Bearer <token>"
+// @Success 200 {object} middleware.Response
+// @Failure 400 {object} middleware.Response
+// @Failure 401 {object} middleware.Response
+// @Router /api/auth/{token} [delete]
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == "" {
+		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Missing token"}}, http.StatusBadRequest)
+		return
+	}
+
+	// Сервер не может "удалить" JWT. Можно реализовать блэклист.
+	err := h.service.Logout(token)
+	if err != nil {
+		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Invalid token"}}, http.StatusUnauthorized)
+		return
+	}
+
+	// Для демонстрации просто возвращаем успех
+	resp := map[string]bool{token: true}
+	middleware.WriteJSONResponse(w, middleware.Response{Response: resp}, http.StatusOK)
+}
+
 // CreateDocument godoc
 // @Summary Загрузка нового документа
 // @Description Загрузка нового документа (файла или JSON) с метаданными.
 // @Tags documents
 // @Accept mpfd
 // @Produce json
+// @Param Authorization header string true "Токен авторизации в формате Bearer <token>"
 // @Param meta formData string true "Метаданные документа в формате JSON"
 // @Param json formData string false "Данные документа в формате JSON (если не файл)"
 // @Param file formData file false "Файл документа (если file=true в meta)"
@@ -112,6 +144,15 @@ func (h *Handler) Authenticate(w http.ResponseWriter, r *http.Request) {
 // @Failure 401 {object} middleware.Response
 // @Router /api/docs [post]
 func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
+
+	// по ТЗ конечно есть в теле запроса, но я бы из хэдера брала. Тем более, мы его там проверяем
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == "" {
+		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Missing token"}}, http.StatusBadRequest)
+		return
+	}
+
 	// Парсим multipart/form-data
 	err := r.ParseMultipartForm(32 << 20) // 32 MB max memory
 	if err != nil {
@@ -148,7 +189,7 @@ func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Создаем документ
-	doc, err := h.service.CreateDocument(r.Context(), meta, jsonData, fileHeader)
+	doc, err := h.service.CreateDocument(r.Context(), token, meta, jsonData, fileHeader)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if err.Error() == "unauthorized" {
@@ -177,7 +218,7 @@ func (h *Handler) CreateDocument(w http.ResponseWriter, r *http.Request) {
 // @Description Получение списка документов текущего пользователя или указанного пользователя (если публичные). Поддерживает фильтрацию и пагинацию.
 // @Tags documents
 // @Produce json
-// @Param token query string true "Токен авторизации"
+// @Param Authorization header string true "Токен авторизации в формате Bearer <token>"
 // @Param login query string false "Логин пользователя, чьи документы запрашиваются"
 // @Param key query string false "Ключ для фильтрации (например, 'name')"
 // @Param value query string false "Значение для фильтрации"
@@ -193,9 +234,10 @@ func (h *Handler) GetDocuments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.URL.Query().Get("token")
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
 	if token == "" {
-		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing token"}}, http.StatusBadRequest)
+		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Missing token"}}, http.StatusBadRequest)
 		return
 	}
 
@@ -248,9 +290,9 @@ func (h *Handler) GetDocuments(w http.ResponseWriter, r *http.Request) {
 // @Description Получение конкретного документа по ID. Если это файл, он отдается напрямую. Если JSON - возвращается в обертке data.
 // @Tags documents
 // @Produce json
+// @Param Authorization header string true "Токен авторизации в формате Bearer <token>"
 // @Param id path string true "ID документа"
-// @Param token query string true "Токен авторизации"
-// @Success 200 {object} middleware.Response
+// // @Success 200 {object} middleware.Response
 // @Failure 400 {object} middleware.Response
 // @Failure 401 {object} middleware.Response
 // @Failure 403 {object} middleware.Response
@@ -263,9 +305,10 @@ func (h *Handler) GetDocumentByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.URL.Query().Get("token")
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
 	if token == "" {
-		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing token"}}, http.StatusBadRequest)
+		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Missing token"}}, http.StatusBadRequest)
 		return
 	}
 
@@ -325,8 +368,8 @@ func getFileSize(filePath string) int64 {
 // @Description Удаление документа по ID. Доступно только владельцу.
 // @Tags documents
 // @Produce json
+// @Param Authorization header string true "Токен авторизации в формате Bearer <token>"
 // @Param id path string true "ID документа"
-// @Param token query string true "Токен авторизации"
 // @Success 200 {object} middleware.Response
 // @Failure 400 {object} middleware.Response
 // @Failure 401 {object} middleware.Response
@@ -334,15 +377,17 @@ func getFileSize(filePath string) int64 {
 // @Failure 404 {object} middleware.Response
 // @Router /api/docs/{id} [delete]
 func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
-	docID := chi.URLParam(r, "id")
-	if docID == "" {
-		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing document ID"}}, http.StatusBadRequest)
+
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == "" {
+		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Missing token"}}, http.StatusBadRequest)
 		return
 	}
 
-	token := r.URL.Query().Get("token")
-	if token == "" {
-		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing token"}}, http.StatusBadRequest)
+	docID := chi.URLParam(r, "id")
+	if docID == "" {
+		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing document ID"}}, http.StatusBadRequest)
 		return
 	}
 
@@ -361,38 +406,5 @@ func (h *Handler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]bool{docID: true}
-	middleware.WriteJSONResponse(w, middleware.Response{Response: resp}, http.StatusOK)
-}
-
-// Logout godoc
-// @Summary Завершение сессии
-// @Description Завершение авторизованной сессии (помечает токен как недействительный).
-// @Tags auth
-// @Produce json
-// @Param token path string true "Токен авторизации"
-// @Success 200 {object} middleware.Response
-// @Failure 400 {object} middleware.Response
-// @Failure 401 {object} middleware.Response
-// @Router /api/auth/{token} [delete]
-func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
-	token := chi.URLParam(r, "token") // Получаем токен из URL
-	if token == "" {
-		// Альтернатива: получить из заголовка Authorization
-		// authHeader := r.Header.Get("Authorization")
-		// token = strings.TrimPrefix(authHeader, "Bearer ")
-		middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 400, Text: "Missing token"}}, http.StatusBadRequest)
-		return
-	}
-
-	// В текущей реализации JWT это просто прекращение использования токена клиентом.
-	// Сервер не может "удалить" JWT. Можно реализовать блэклист.
-	// err := h.service.Logout(token)
-	// if err != nil {
-	// 	middleware.WriteJSONResponse(w, middleware.Response{Error: &middleware.ErrorResponse{Code: 401, Text: "Invalid token"}}, http.StatusUnauthorized)
-	// 	return
-	// }
-
-	// Для демонстрации просто возвращаем успех
-	resp := map[string]bool{token: true}
 	middleware.WriteJSONResponse(w, middleware.Response{Response: resp}, http.StatusOK)
 }

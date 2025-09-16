@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
@@ -113,12 +114,39 @@ func (s *Service) Authenticate(ctx context.Context, login, password string) (str
 }
 
 func (s *Service) ValidateToken(tokenString string) (*jwt.Token, error) {
-	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.jwtSecret, nil
 	})
+
+	if err != nil {
+		return nil, err // Ошибка парсинга или подписи
+	}
+
+	if !token.Valid {
+		return nil, errors.New("token is invalid")
+	}
+
+	// Хэшируем токен для проверки блэклиста
+	tokenHash := utils.HashToken(tokenString)
+
+	// Проверяем блэклист
+	isBlacklisted, err := s.cache.IsTokenBlacklisted(context.Background(), tokenHash)
+	if err != nil {
+		// TODO: Ошибка Redis - считать ли токен недействительным или разрешить?
+		// Для безопасности лучше запретить
+		log.Printf("Error checking blacklist: %v", err)                // Логируем ошибку
+		return nil, fmt.Errorf("error checking token status: %w", err) // 500
+	}
+
+	if isBlacklisted {
+		return nil, errors.New("token has been logged out") // 401
+	}
+
+	// Токен валиден и не в блэклисте
+	return token, nil
 }
 
 func (s *Service) GetUserIDFromToken(tokenString string) (uuid.UUID, error) {
@@ -185,8 +213,8 @@ func (s *Service) handleFileUpload(fileHeader *multipart.FileHeader) (string, st
 	return filePath, mime, nil
 }
 
-func (s *Service) CreateDocument(ctx context.Context, meta model.CreateDocumentRequest, jsonData *string, fileHeader *multipart.FileHeader) (model.Document, error) {
-	userID, err := s.GetUserIDFromToken(meta.Token)
+func (s *Service) CreateDocument(ctx context.Context, tokenString string, meta model.CreateDocumentRequest, jsonData *string, fileHeader *multipart.FileHeader) (model.Document, error) {
+	userID, err := s.GetUserIDFromToken(tokenString)
 	if err != nil {
 		return model.Document{}, errors.New("unauthorized")
 	}
@@ -376,20 +404,39 @@ func (s *Service) DeleteDocument(ctx context.Context, tokenString, docIDStr stri
 }
 
 func (s *Service) Logout(tokenString string) error {
-	// В данном случае, так как токены JWT самодостаточны,
-	// "выход" означает просто прекращение использования токена клиентом.
-	// Для немедленной инвалидации можно реализовать блэклист токенов в Redis.
-	// token, err := s.ValidateToken(tokenString)
-	// if err != nil {
-	// 	return err
-	// }
-	// if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-	// 	exp, _ := claims.GetExpirationTime()
-	// 	if exp != nil {
-	// 		// Добавляем токен в блэклист с временем жизни равным времени жизни токена
-	// 		// hash := utils.HashToken(tokenString) // Нужна функция хэширования
-	// 		// return s.cache.BlacklistToken(context.Background(), hash, time.Until(exp.Time))
-	// 	}
-	// }
+	token, err := s.ValidateToken(tokenString)
+	if err != nil {
+		return errors.New("invalid or malformed token") // 401
+	}
+
+	if !token.Valid {
+		return errors.New("token is invalid") // 401
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return errors.New("failed to parse token claims") // 500
+	}
+
+	exp, err := claims.GetExpirationTime()
+	if err != nil || exp == nil {
+		return errors.New("token has no expiration time") // 400 или 500
+	}
+
+	tokenHash := utils.HashToken(tokenString) // Используем функцию из pkg/utils
+
+	// Вычисляем TTL: время до истечения токена
+	ttl := time.Until(exp.Time)
+	if ttl <= 0 {
+		// Токен уже истёк, можно не добавлять в блэклист, но для единообразия добавим с минимальным TTL
+		ttl = time.Second // Минимальный TTL, чтобы ключ не оставался вечно
+	}
+
+	// Добавляем хэш токена в блэклист в Redis
+	err = s.cache.BlacklistToken(context.Background(), tokenHash, ttl)
+	if err != nil {
+		return fmt.Errorf("failed to blacklist token: %w", err) // 500
+	}
+
 	return nil
 }

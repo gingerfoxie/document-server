@@ -23,12 +23,14 @@ func NewMiddleware(s *service.Service, logger *slog.Logger) *Middleware {
 }
 
 // Response структура для ответа
+// swagger:model Response
 type Response struct {
 	Error    *ErrorResponse `json:"error,omitempty"`
 	Response interface{}    `json:"response,omitempty"`
 	Data     interface{}    `json:"data,omitempty"`
 }
 
+// swagger:model ErrorResponse
 type ErrorResponse struct {
 	Code int    `json:"code"`
 	Text string `json:"text"`
