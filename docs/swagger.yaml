@@ -1,0 +1,309 @@
+basePath: /
+definitions:
+  middleware.ErrorResponse:
+    properties:
+      code:
+        type: integer
+      text:
+        type: string
+    type: object
+  middleware.Response:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/middleware.ErrorResponse'
+      response: {}
+    type: object
+  model.AuthRequest:
+    properties:
+      login:
+        description: |-
+          User login
+          required: true
+        type: string
+      pswd:
+        description: |-
+          User password
+          required: true
+        type: string
+    type: object
+  model.RegisterRequest:
+    properties:
+      login:
+        description: |-
+          User login (min 8 chars, latin letters and digits)
+          required: true
+          minLength: 8
+          pattern: ^[a-zA-Z0-9]+$
+        type: string
+      pswd:
+        description: |-
+          User password (min 8 chars, 2 letters different case, 1 digit, 1 special char)
+          required: true
+          minLength: 8
+        type: string
+      token:
+        description: |-
+          Admin token required for registration
+          required: true
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Веб-сервер для сохранения и раздачи электронных документов с кэшированием.
+  title: Document Server API
+  version: "1.0"
+paths:
+  /api/auth:
+    post:
+      consumes:
+      - application/json
+      description: Получение JWT токена по логину и паролю.
+      parameters:
+      - description: Учетные данные
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.AuthRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/middleware.Response'
+      summary: Аутентификация пользователя
+      tags:
+      - auth
+  /api/auth/{token}:
+    delete:
+      description: Завершение авторизованной сессии (помечает токен как недействительный).
+      parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/middleware.Response'
+      summary: Завершение сессии
+      tags:
+      - auth
+  /api/docs:
+    get:
+      description: Получение списка документов текущего пользователя или указанного
+        пользователя (если публичные). Поддерживает фильтрацию и пагинацию.
+      parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Логин пользователя, чьи документы запрашиваются
+        in: query
+        name: login
+        type: string
+      - description: Ключ для фильтрации (например, 'name')
+        in: query
+        name: key
+        type: string
+      - description: Значение для фильтрации
+        in: query
+        name: value
+        type: string
+      - description: Лимит количества документов (по умолчанию 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/middleware.Response'
+      summary: Получение списка документов
+      tags:
+      - documents
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загрузка нового документа (файла или JSON) с метаданными.
+      parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Метаданные документа в формате JSON
+        in: formData
+        name: meta
+        required: true
+        type: string
+      - description: Данные документа в формате JSON (если не файл)
+        in: formData
+        name: json
+        type: string
+      - description: Файл документа (если file=true в meta)
+        in: formData
+        name: file
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/middleware.Response'
+      summary: Загрузка нового документа
+      tags:
+      - documents
+  /api/docs/{id}:
+    delete:
+      description: Удаление документа по ID. Доступно только владельцу.
+      parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: ID документа
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/middleware.Response'
+      summary: Удаление документа
+      tags:
+      - documents
+    get:
+      description: Получение конкретного документа по ID. Если это файл, он отдается
+        напрямую. Если JSON - возвращается в обертке data.
+      parameters:
+      - description: Токен авторизации в формате Bearer <token>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: ID документа
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/middleware.Response'
+      summary: Получение одного документа
+      tags:
+      - documents
+  /api/register:
+    post:
+      consumes:
+      - application/json
+      description: Создание нового пользователя. Требуется токен администратора.
+      parameters:
+      - description: Данные для регистрации
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/model.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/middleware.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/middleware.Response'
+      summary: Регистрация нового пользователя
+      tags:
+      - auth
+schemes:
+- http
+- https
+swagger: "2.0"
