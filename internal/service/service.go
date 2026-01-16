@@ -8,12 +8,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 
 	"document-server/internal/cache"
 	"document-server/internal/model"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -32,9 +34,11 @@ type Service struct {
 	jwtSecret  []byte
 	adminToken string
 	uploadDir  string // Каталог для загрузки файлов
+	logger     *zap.Logger
+	cacheGroup singleflight.Group
 }
 
-func NewService(userRepo repository.UserRepository, docRepo repository.DocumentRepository, cache *cache.RedisCache, jwtSecret, adminToken, uploadDir string) *Service {
+func NewService(userRepo repository.UserRepository, docRepo repository.DocumentRepository, cache *cache.RedisCache, jwtSecret, adminToken, uploadDir string, logger *zap.Logger) *Service {
 	// Убедимся, что директория для загрузок существует
 	if err := os.MkdirAll(uploadDir, 0755); err != nil {
 		// Лучше обработать это на старте приложения
@@ -47,6 +51,8 @@ func NewService(userRepo repository.UserRepository, docRepo repository.DocumentR
 		jwtSecret:  []byte(jwtSecret),
 		adminToken: adminToken,
 		uploadDir:  uploadDir,
+		logger:     logger,
+		cacheGroup: singleflight.Group{},
 	}
 }
 
@@ -137,7 +143,7 @@ func (s *Service) ValidateToken(tokenString string) (*jwt.Token, error) {
 	if err != nil {
 		// TODO: Ошибка Redis - считать ли токен недействительным или разрешить?
 		// Для безопасности лучше запретить
-		log.Printf("Error checking blacklist: %v", err)                // Логируем ошибку
+		s.logger.Error("Error checking blacklist", zap.Error(err))     // Логируем ошибку
 		return nil, fmt.Errorf("error checking token status: %w", err) // 500
 	}
 
@@ -267,7 +273,6 @@ func (s *Service) GetDocuments(ctx context.Context, tokenString, loginFilter, ke
 	}
 
 	// Определяем, чьи документы запрашивать
-	targetUserID := userID
 	if loginFilter != "" {
 		// Проверяем, существует ли пользователь с таким логином
 		_, err := s.userRepo.GetUserByLogin(ctx, loginFilter)
@@ -285,26 +290,50 @@ func (s *Service) GetDocuments(ctx context.Context, tokenString, loginFilter, ke
 	// Формируем ключ кэша
 	cacheKey := fmt.Sprintf("doclist:%s:%s:%s:%d", userID.String(), key, value, limit) // Упрощенный ключ
 
+	s.logger.Info("cache get", zap.String("key", key)) // test
+
 	// Пытаемся получить из кэша
+
 	if cachedData, err := s.cache.GetDocumentList(ctx, cacheKey); err == nil {
 		var docs []model.Document
 		if json.Unmarshal(cachedData, &docs) == nil {
+			s.logger.Info("cache hit", zap.String("key", key), zap.Int("size", len(cachedData)))
 			return docs, nil // Возвращаем из кэша
 		}
 	}
 
-	// Получаем из БД
-	docs, err := s.docRepo.GetDocuments(ctx, targetUserID, limit, key, value)
+	s.logger.Info("cache miss", zap.String("key", key), zap.Error(err))
+
+	// Используем singleflight для защиты от cache stampede
+	result, err, _ := s.cacheGroup.Do(cacheKey, func() (interface{}, error) {
+		s.logger.Info("loading from db (singleflight)", zap.String("key", cacheKey))
+
+		// Загружаем из БД только один раз
+		docs, err := s.docRepo.GetDocumentsWithGrants(ctx, userID, limit, key, value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get documents: %w", err)
+		}
+
+		// Сохраняем в кэш (только один раз)
+		if data, err := json.Marshal(docs); err == nil {
+			// Можно сделать синхронно или асинхронно
+			go func() {
+				ctx := context.Background()
+				if err := s.cache.SetDocumentList(ctx, cacheKey, data); err != nil {
+					s.logger.Error("failed to set cache", zap.String("key", cacheKey), zap.Error(err))
+				}
+			}()
+		}
+
+		return docs, nil
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("failed to get documents: %w", err)
+		return nil, err
 	}
 
-	// Сохраняем в кэш
-	if data, err := json.Marshal(docs); err == nil {
-		go s.cache.SetDocumentList(context.Background(), cacheKey, data) // Не блокируем
-	}
+	return result.([]model.Document), nil
 
-	return docs, nil
 }
 
 func (s *Service) GetDocumentByID(ctx context.Context, tokenString, docIDStr string) (model.Document, error) {

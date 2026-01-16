@@ -7,20 +7,23 @@ import (
 )
 
 type Config struct {
-	ServerPort   string `mapstructure:"SERVER_PORT"`
-	DBHost       string `mapstructure:"DB_HOST"`
-	DBPort       string `mapstructure:"DB_PORT"`
-	DBUser       string `mapstructure:"DB_USER"`
-	DBPassword   string `mapstructure:"DB_PASSWORD"`
-	DBName       string `mapstructure:"DB_NAME"`
-	DBSSLMode    string `mapstructure:"DB_SSLMODE"`
-	RedisAddr    string `mapstructure:"REDIS_ADDR"`
-	RedisPass    string `mapstructure:"REDIS_PASSWORD"`
-	RedisDB      int    `mapstructure:"REDIS_DB"`
-	JWTSecret    string `mapstructure:"JWT_SECRET"`
-	AdminToken   string `mapstructure:"ADMIN_TOKEN"`
-	CacheTTLList int    `mapstructure:"CACHE_TTL_DOC_LIST"`
-	CacheTTLItem int    `mapstructure:"CACHE_TTL_DOC_ITEM"`
+	ServerPort         string `mapstructure:"SERVER_PORT"`
+	ServerReadTimeout  int    `mapstructure:"SERVER_READ_TIMEOUT"`
+	ServerWriteTimeout int    `mapstructure:"SERVER_WRITE_TIMEOUT"`
+	DBHost             string `mapstructure:"DB_HOST"`
+	DBPort             string `mapstructure:"DB_PORT"`
+	DBUser             string `mapstructure:"DB_USER"`
+	DBPassword         string `mapstructure:"DB_PASSWORD"`
+	DBName             string `mapstructure:"DB_NAME"`
+	DBSSLMode          string `mapstructure:"DB_SSLMODE"`
+	LogLevel           string `mapstructure:"LOGGER_LOG_LEVEL"`
+	RedisAddr          string `mapstructure:"REDIS_ADDR"`
+	RedisPass          string `mapstructure:"REDIS_PASSWORD"`
+	RedisDB            int    `mapstructure:"REDIS_DB"`
+	JWTSecret          string `mapstructure:"JWT_SECRET"`
+	AdminToken         string `mapstructure:"ADMIN_TOKEN"`
+	CacheTTLList       int    `mapstructure:"CACHE_TTL_DOC_LIST"`
+	CacheTTLItem       int    `mapstructure:"CACHE_TTL_DOC_ITEM"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

@@ -93,33 +93,29 @@ func (p *Postgres) CreateDocument(ctx context.Context, doc model.Document) (mode
 func (p *Postgres) GetDocuments(ctx context.Context, ownerID uuid.UUID, limit int, key, value string) ([]model.Document, error) {
 	var docs []model.Document
 
-	// Базовый запрос
 	baseQuery := `
-		SELECT d.id, d.owner_id, d.name, d.mime_type, d.is_file, d.is_public, d.json_data, d.file_path, d.created_at
-		FROM documents d
-		WHERE d.owner_id = $1 OR d.is_public = TRUE
-	`
+	SELECT d.id, d.owner_id, d.name, d.mime_type, d.is_file, d.is_public, d.json_data, d.file_path, d.created_at
+	FROM documents d
+	WHERE (d.owner_id = $1 OR d.is_public = TRUE)
+`
 
 	// Добавляем фильтрацию
 	args := []interface{}{ownerID}
 	argCount := 2
-	filterQuery := ""
+
 	if key != "" && value != "" {
-		// Предполагаем, что key это имя колонки. В реальном приложении нужно валидировать.
-		// Для простоты фильтруем по имени.
 		if key == "name" {
-			filterQuery = fmt.Sprintf(" AND d.name ILIKE $%d", argCount)
+			baseQuery += fmt.Sprintf(" AND d.name ILIKE $%d", argCount)
 			args = append(args, "%"+value+"%")
 			argCount++
 		}
-		// Можно добавить фильтрацию по другим полям
 	}
 
 	// Добавляем сортировку и лимит
 	orderLimitQuery := fmt.Sprintf(" ORDER BY d.name ASC, d.created_at DESC LIMIT $%d", argCount)
 	args = append(args, limit)
 
-	fullQuery := baseQuery + filterQuery + orderLimitQuery
+	fullQuery := baseQuery + orderLimitQuery
 
 	rows, err := p.db.Query(ctx, fullQuery, args...)
 	if err != nil {
@@ -136,17 +132,41 @@ func (p *Postgres) GetDocuments(ctx context.Context, ownerID uuid.UUID, limit in
 		docs = append(docs, doc)
 	}
 
-	// Загружаем гранты для каждого документа
-	for i := range docs {
-		grants, err := p.GetGrants(ctx, docs[i].ID)
-		if err != nil {
-			// Логируем ошибку, но не прерываем выполнение
-			fmt.Printf("Error getting grants for doc %s: %v\n", docs[i].ID, err)
-		}
-		docs[i].Grant = grants
+	return docs, rows.Err()
+}
+
+func (p *Postgres) GetDocumentsWithGrants(ctx context.Context, ownerID uuid.UUID, limit int, key, value string) ([]model.Document, error) {
+
+	// 1. Получить документы
+	docs, err := p.GetDocuments(ctx, ownerID, limit, key, value)
+	if err != nil {
+		return nil, err
 	}
 
-	return docs, rows.Err()
+	// 2. Извлечь ID
+	if len(docs) == 0 {
+		return docs, nil
+	}
+
+	docUUIDs := make([]uuid.UUID, len(docs))
+	for i, doc := range docs {
+		docUUIDs[i] = doc.ID
+	}
+
+	// 3. Загрузить все гранты за раз
+	grantsMap, err := p.GetGrantsByDocIDs(ctx, docUUIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	// 4. Привязка
+	for i := range docs {
+		docID := docs[i].ID
+		docs[i].Grant = grantsMap[docID] // если Grant это []string
+	}
+
+	return docs, nil
+
 }
 
 func (p *Postgres) GetDocumentByID(ctx context.Context, docID uuid.UUID) (model.Document, error) {
@@ -231,4 +251,38 @@ func (p *Postgres) GetGrants(ctx context.Context, docID uuid.UUID) ([]string, er
 		logins = append(logins, login)
 	}
 	return logins, rows.Err()
+}
+
+func (p *Postgres) GetGrantsByDocIDs(ctx context.Context, docIDs []uuid.UUID) (map[uuid.UUID][]string, error) {
+	if len(docIDs) == 0 {
+		return make(map[uuid.UUID][]string), nil
+	}
+
+	query := `
+        SELECT document_id, user_login 
+        FROM document_grants 
+        WHERE document_id = ANY($1)
+        ORDER BY document_id
+    `
+
+	rows, err := p.db.Query(ctx, query, docIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	grantsMap := make(map[uuid.UUID][]string)
+	for rows.Next() {
+		var docID uuid.UUID
+		var login string
+
+		err := rows.Scan(&docID, &login)
+		if err != nil {
+			return nil, err
+		}
+
+		grantsMap[docID] = append(grantsMap[docID], login)
+	}
+
+	return grantsMap, rows.Err()
 }

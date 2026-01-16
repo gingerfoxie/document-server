@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
@@ -11,14 +12,16 @@ import (
 	"document-server/internal/service"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type Middleware struct {
 	service *service.Service
-	logger  *slog.Logger
+	logger  *zap.Logger
 }
 
-func NewMiddleware(s *service.Service, logger *slog.Logger) *Middleware {
+func NewMiddleware(s *service.Service, logger *zap.Logger) *Middleware {
 	return &Middleware{service: s, logger: logger}
 }
 
@@ -78,14 +81,16 @@ func (m *Middleware) Logging(next http.Handler) http.Handler {
 		ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
 		start := time.Now()
 		defer func() {
-			m.logger.Info("Request",
-				"method", r.Method,
-				"url", r.URL.Path,
-				"remote_addr", r.RemoteAddr,
-				"user_agent", r.UserAgent(),
-				"status", ww.Status(),
-				"took", time.Since(start),
-			)
+			if m.logger.Level().Enabled(zapcore.InfoLevel) {
+				m.logger.Info("Request",
+					zap.String("method", r.Method),
+					zap.String("url", r.URL.Path),
+					zap.String("remote_addr", r.RemoteAddr),
+					zap.String("user_agent", r.UserAgent()),
+					zap.Int("status", ww.Status()),
+					zap.Duration("took", time.Since(start)),
+				)
+			}
 		}()
 		next.ServeHTTP(ww, r)
 	})
@@ -113,7 +118,10 @@ func (m *Middleware) Recover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rvr := recover(); rvr != nil {
-				m.logger.Error("Panic recovered", "panic", rvr, "stack", string(debug.Stack()))
+				m.logger.Error("Panic recovered",
+					zap.Error(fmt.Errorf("%v", rvr)), // если rvr - error
+					zap.String("stack", string(debug.Stack())),
+				)
 				WriteJSONResponse(w, Response{Error: &ErrorResponse{Code: 500, Text: "Internal Server Error"}}, http.StatusInternalServerError)
 			}
 		}()

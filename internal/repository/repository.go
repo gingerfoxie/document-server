@@ -20,4 +20,6 @@ type DocumentRepository interface {
 	DeleteDocument(ctx context.Context, docID uuid.UUID) error
 	AddGrants(ctx context.Context, docID uuid.UUID, logins []string) error
 	GetGrants(ctx context.Context, docID uuid.UUID) ([]string, error)
+	GetDocumentsWithGrants(ctx context.Context, ownerID uuid.UUID, limit int, key, value string) ([]model.Document, error)
+	GetGrantsByDocIDs(ctx context.Context, docIDs []uuid.UUID) (map[uuid.UUID][]string, error)
 }

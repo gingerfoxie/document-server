@@ -22,8 +22,12 @@ CREATE TABLE IF NOT EXISTS documents (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Index for faster document lookups by owner
-CREATE INDEX IF NOT EXISTS idx_documents_owner_id ON documents(owner_id);
+-- Index for faster document lookups
+CREATE INDEX IF NOT EXISTS idx_docs_owner_or_public_created ON documents(owner_id, is_public, created_at DESC);
+
+-- Index for faster document lookups by name
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_docs_name_trgm ON documents USING gin(name gin_trgm_ops);
 
 -- Grants table (many-to-many relationship between documents and users they are shared with)
 CREATE TABLE IF NOT EXISTS document_grants (
@@ -33,6 +37,5 @@ CREATE TABLE IF NOT EXISTS document_grants (
 );
 
 -- Index for faster grant lookups
-CREATE INDEX IF NOT EXISTS idx_document_grants_user_login ON document_grants(user_login);
-
+CREATE INDEX IF NOT EXISTS idx_grants_doc_login ON document_grants(document_id, user_login);
 
