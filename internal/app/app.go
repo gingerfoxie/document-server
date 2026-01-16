@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -14,6 +14,8 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"document-server/internal/cache"
 	"document-server/internal/config"
@@ -29,12 +31,17 @@ import (
 
 type App struct {
 	server *http.Server
-	logger *slog.Logger
+	logger *zap.Logger
 }
 
 func NewApp(cfg config.Config) (*App, error) {
 	// Logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	//logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger, err := initLogger(cfg)
+	if err != nil {
+		panic(err)
+	}
+	defer logger.Sync()
 
 	// Database
 	dbURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
@@ -57,10 +64,10 @@ func NewApp(cfg config.Config) (*App, error) {
 	docRepo := repository.NewPostgres(dbPool)
 
 	// Cache
-	cacheRepo := cache.NewRedisCache(redisClient, cfg.CacheTTLList, cfg.CacheTTLItem)
+	cacheRepo := cache.NewRedisCache(redisClient, cfg.CacheTTLList, cfg.CacheTTLItem, logger)
 
 	// Service
-	svc := service.NewService(userRepo, docRepo, cacheRepo, cfg.JWTSecret, cfg.AdminToken, "./uploads")
+	svc := service.NewService(userRepo, docRepo, cacheRepo, cfg.JWTSecret, cfg.AdminToken, "./uploads", logger)
 
 	// Handler
 	h := handler.NewHandler(svc, logger)
@@ -97,8 +104,10 @@ func NewApp(cfg config.Config) (*App, error) {
 
 	// Server
 	srv := &http.Server{
-		Addr:    ":" + cfg.ServerPort,
-		Handler: r,
+		Addr:         ":" + cfg.ServerPort,
+		Handler:      r,
+		ReadTimeout:  time.Duration(cfg.ServerReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.ServerWriteTimeout) * time.Second,
 	}
 
 	// Docs
@@ -117,10 +126,10 @@ func (a *App) Run() error {
 
 	go func() {
 		if err := a.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			a.logger.Error("Server failed", "error", err)
+			a.logger.Error("Server failed", zap.Error(err))
 		}
 	}()
-	a.logger.Info("Server started", "addr", a.server.Addr)
+	a.logger.Info("Server started", zap.String("addr", a.server.Addr))
 
 	<-done
 	a.logger.Info("Shutting down server...")
@@ -129,9 +138,50 @@ func (a *App) Run() error {
 	defer cancel()
 
 	if err := a.server.Shutdown(ctx); err != nil {
-		a.logger.Error("Server shutdown failed", "error", err)
+		a.logger.Error("Server shutdown failed", zap.Error(err))
 		return err
 	}
 	a.logger.Info("Server exited")
 	return nil
+}
+
+func initLogger(cfg config.Config) (*zap.Logger, error) {
+	// Преобразуем строку в zap level
+	var level zapcore.Level
+	switch strings.ToLower(cfg.LogLevel) {
+	case "debug":
+		level = zap.DebugLevel
+	case "info":
+		level = zap.InfoLevel
+	case "warn", "warning":
+		level = zap.WarnLevel
+	case "error":
+		level = zap.ErrorLevel
+	default:
+		level = zap.InfoLevel
+	}
+
+	// Конфигурация
+	config := zap.Config{
+		Level:       zap.NewAtomicLevelAt(level),
+		Development: false,
+		Encoding:    "json", // или "console" для удобства разработки
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "ts",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			MessageKey:     "msg",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.LowercaseLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.SecondsDurationEncoder,
+			EncodeCaller:   zapcore.ShortCallerEncoder,
+		},
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+
+	return config.Build()
 }

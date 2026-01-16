@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -15,14 +14,15 @@ import (
 	"document-server/internal/service"
 
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	service *service.Service
-	logger  *slog.Logger
+	logger  *zap.Logger
 }
 
-func NewHandler(s *service.Service, logger *slog.Logger) *Handler {
+func NewHandler(s *service.Service, logger *zap.Logger) *Handler {
 	return &Handler{service: s, logger: logger}
 }
 

@@ -2,23 +2,25 @@ package cache
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 type RedisCache struct {
 	client  *redis.Client
 	ttlList time.Duration
 	ttlItem time.Duration
+	logger  *zap.Logger
 }
 
-func NewRedisCache(client *redis.Client, ttlList, ttlItem int) *RedisCache {
+func NewRedisCache(client *redis.Client, ttlList, ttlItem int, logger *zap.Logger) *RedisCache {
 	return &RedisCache{
 		client:  client,
 		ttlList: time.Duration(ttlList) * time.Second,
 		ttlItem: time.Duration(ttlItem) * time.Second,
+		logger:  logger,
 	}
 }
 
@@ -27,7 +29,18 @@ func (r *RedisCache) GetDocumentList(ctx context.Context, key string) ([]byte, e
 }
 
 func (r *RedisCache) SetDocumentList(ctx context.Context, key string, data []byte) error {
-	return r.client.Set(ctx, key, data, r.ttlList).Err()
+	r.logger.Info("cache set",
+		zap.String("key", key),
+		zap.Int("size", len(data)),
+	) //test
+	err := r.client.Set(ctx, key, data, r.ttlList).Err()
+	if err != nil {
+		r.logger.Error("cache set error",
+			zap.String("key", key),
+			zap.Error(err),
+		)
+	}
+	return err
 }
 
 func (r *RedisCache) GetDocumentItem(ctx context.Context, key string) ([]byte, error) {
@@ -46,7 +59,7 @@ func (r *RedisCache) InvalidateDocumentLists(ctx context.Context) error {
 		err := r.client.Del(ctx, iter.Val()).Err()
 		if err != nil {
 			// Логируем, но продолжаем
-			log.Printf("Failed to delete cache key %s: %v", iter.Val(), err)
+			r.logger.Error("Failed to delete cache key", zap.String("cache key", iter.Val()), zap.Error(err))
 		}
 	}
 	return iter.Err()
